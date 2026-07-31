@@ -11,7 +11,7 @@ Rails.application.routes.draw do
       resources :trains
       resources :coaches
 
-      resources :seats, only: :show
+      resources :seats
 
       resources :journeys, only: [ :index, :show, :create ] do
         resource :availability, only: :show, controller: "seat_availability"
