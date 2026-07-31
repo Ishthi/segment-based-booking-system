@@ -7,4 +7,8 @@ Rails.application.routes.draw do
 
   # Defines the root path route ("/")
   # root "posts#index"
+  resources :journeys, only: [ :index, :show ] do
+    resource :availability, only: [ :show ], controller: "seat_availability"
+    resources :bookings, only: [ :create, :index ]
+  end
 end
