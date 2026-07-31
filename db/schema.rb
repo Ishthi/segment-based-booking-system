@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_31_182605) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_31_195619) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -36,7 +36,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_182605) do
 
   create_table "coaches", force: :cascade do |t|
     t.string "coach_number", null: false
-    t.string "coach_type", null: false
+    t.integer "coach_type", null: false
     t.datetime "created_at", null: false
     t.integer "seat_count", null: false
     t.bigint "train_id", null: false
