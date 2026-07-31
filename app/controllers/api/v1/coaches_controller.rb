@@ -1,9 +1,9 @@
 class Api::V1::CoachesController < Api::V1::ApplicationController
+  before_action :set_train
   before_action :set_coach, only: [ :show, :update, :destroy ]
 
   def index
-    coaches = Coach.includes(:train).order(:coach_number)
-
+    coaches = @train.coaches.includes(:train).order(:coach_number)
     render json: coaches
   end
 
@@ -12,36 +12,32 @@ class Api::V1::CoachesController < Api::V1::ApplicationController
   end
 
   def create
-    coach = Coach.create!(coach_params)
-
+    coach = @train.coaches.create!(coach_params)
     render json: coach, status: :created
   end
 
   def update
     @coach.update!(coach_params)
-
     render json: @coach
   end
 
   def destroy
     @coach.destroy!
-
     head :no_content
   end
 
   private
 
+  def set_train
+    @train = Train.find(params[:train_id])
+  end
+
   def set_coach
-    @coach = Coach.find(params[:id])
+    @coach = @train.coaches.find(params[:id])
   end
 
   def coach_params
     params.require(:coach)
-          .permit(
-            :train_id,
-            :coach_number,
-            :coach_type,
-            :seat_count
-          )
+          .permit(:coach_number, :coach_type, :seat_count)
   end
 end
