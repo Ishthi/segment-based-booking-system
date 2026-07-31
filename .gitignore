@@ -26,3 +26,13 @@
 /config/*.key
 .DS_Store
 
+node_modules/
+dist/
+build/
+.env
+npm-debug.log*
+.DS_Store
+tmp/
+log/
+storage/
+coverage/
