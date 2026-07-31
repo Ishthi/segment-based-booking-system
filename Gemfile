@@ -46,4 +46,6 @@ group :development, :test do
   gem "rubocop-rails-omakase", require: false
 
   gem "bullet", "~> 8.1"
+
+  gem "rack-cors"
 end
