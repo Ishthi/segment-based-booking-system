@@ -391,7 +391,7 @@ function App() {
             <ul className="list">
               {stations.map((station) => (
                 <li key={station.id}>
-                  <strong>{station.name}</strong> — Seq {station.sequence} — {station.distance_km} km
+                  <strong>{station.name}</strong> {station.distance_km} km
                   <div className="actions">
                     <button type="button" onClick={() => handleStationEdit(station)}>Edit</button>
                     <button type="button" onClick={() => handleStationDelete(station.id)}>Delete</button>
@@ -430,11 +430,15 @@ function App() {
             </form>
 
             <ul className="list">
-              {journeys.map((journey) => (
-                <li key={journey.id}>
-                  Journey #{journey.id} — Train {journey.train_id} — {journey.travel_date}
-                </li>
-              ))}
+              {journeys.map((journey) => {
+                const trainName = trains.find((train) => train.id === journey.train_id)?.name ?? 'Unknown'
+
+                return (
+                  <li key={journey.id}>
+                    <strong>Journey</strong> Train {trainName} — {journey.travel_date}
+                  </li>
+                )
+              })}
             </ul>
           </section>
         )}
@@ -450,11 +454,15 @@ function App() {
                 required
               >
                 <option value="">Select journey</option>
-                {journeys.map((journey) => (
-                  <option key={journey.id} value={journey.id}>
-                    {journey.id} — {journey.travel_date}
-                  </option>
-                ))}
+               {journeys.map((journey) => {
+                  const trainName = trains.find((train) => train.id === journey.train_id)?.name ?? 'Unknown'
+
+                  return (
+                    <option key={journey.id} value={journey.id}>
+                      {trainName} — {journey.travel_date}
+                    </option>
+                  )
+                })}
               </select>
 
               <select
@@ -505,12 +513,6 @@ function App() {
                   </option>
                 ))}
               </select>
-
-              <input
-                value={bookingForm.expected_seat_version}
-                onChange={(event: ChangeEvent<HTMLInputElement>) => setBookingForm({ ...bookingForm, expected_seat_version: event.target.value })}
-                placeholder="Expected seat version (optional)"
-              />
 
               <button type="submit">Create booking</button>
             </form>
