@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_31_102059) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_31_113859) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -43,6 +43,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_102059) do
     t.datetime "updated_at", null: false
     t.index ["train_id", "coach_number"], name: "index_coaches_on_train_id_and_coach_number", unique: true
     t.index ["train_id"], name: "index_coaches_on_train_id"
+  end
+
+  create_table "idempotency_keys", force: :cascade do |t|
+    t.bigint "booking_id", null: false
+    t.datetime "created_at", null: false
+    t.string "key"
+    t.string "request_hash"
+    t.datetime "updated_at", null: false
+    t.index ["booking_id"], name: "index_idempotency_keys_on_booking_id"
   end
 
   create_table "journeys", force: :cascade do |t|
@@ -83,6 +92,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_102059) do
   add_foreign_key "bookings", "stations", column: "destination_station_id"
   add_foreign_key "bookings", "stations", column: "origin_station_id"
   add_foreign_key "coaches", "trains"
+  add_foreign_key "idempotency_keys", "bookings"
   add_foreign_key "journeys", "trains"
   add_foreign_key "seats", "coaches"
 end
