@@ -20,7 +20,7 @@ class Api::V1::TrainsController < Api::V1::ApplicationController
   def update
     @train.update!(train_params)
 
-    render json: train
+    render json: @train
   end
 
   def destroy
