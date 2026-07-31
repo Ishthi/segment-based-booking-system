@@ -1,4 +1,4 @@
-class Api::V1::TrainsController < ApplicationController
+class Api::V1::TrainsController < Api::V1::ApplicationController
   before_action :set_train, only: [ :show, :update, :destroy ]
 
   def index

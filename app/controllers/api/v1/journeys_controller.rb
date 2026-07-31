@@ -1,4 +1,4 @@
-class Api::V1::JourneysController < ApplicationController
+class Api::V1::JourneysController < Api::V1::ApplicationController
   def create
     journey = Journey.create!(
       journey_params

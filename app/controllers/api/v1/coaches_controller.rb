@@ -1,4 +1,4 @@
-class Api::V1::CoachesController < ApplicationController
+class Api::V1::CoachesController < Api::V1::ApplicationController
   before_action :set_coach, only: [ :show, :update, :destroy ]
 
   def index

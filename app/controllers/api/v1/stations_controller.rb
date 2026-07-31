@@ -1,4 +1,4 @@
-class Api::V1::StationsController < ApplicationController
+class Api::V1::StationsController < Api::V1::ApplicationController
   before_action :set_station, only: [ :show, :update, :destroy ]
 
   def index

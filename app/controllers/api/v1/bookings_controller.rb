@@ -1,4 +1,4 @@
-class Api::V1::BookingsController < ApplicationController
+class Api::V1::BookingsController < Api::V1::ApplicationController
   def create
     key = request.headers["Idempotency-Key"]
 

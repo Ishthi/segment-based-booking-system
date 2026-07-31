@@ -1,4 +1,4 @@
-class Api::V1::SeatAvailabilityController < ApplicationController
+class Api::V1::SeatAvailabilityController < Api::V1::ApplicationController
   def show
     journey = Journey.find(params[:journey_id])
     origin = Station.find(params[:origin_station_id])
