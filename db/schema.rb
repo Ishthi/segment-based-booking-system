@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_31_113859) do
+ActiveRecord::Schema[8.1].define(version: 2026_07_31_182605) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -85,6 +85,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_113859) do
     t.datetime "created_at", null: false
     t.string "name", null: false
     t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_trains_on_name", unique: true
   end
 
   add_foreign_key "bookings", "journeys"
