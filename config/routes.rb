@@ -13,7 +13,7 @@ Rails.application.routes.draw do
 
       resources :seats, only: :show
 
-      resources :journeys, only: :create do
+      resources :journeys, only: [ :index, :show, :create ] do
         resource :availability, only: :show, controller: "seat_availability"
         resources :bookings, only: :create
       end
