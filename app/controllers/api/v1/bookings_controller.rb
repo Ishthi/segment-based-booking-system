@@ -10,16 +10,57 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
     end
 
     result = BookingService.new(
-      journey: journey, seat: seat, origin_station: origin, destination_station: destination,
-      passenger_name: params[:passenger_name], expected_seat_version: params[:expected_seat_version]
+      journey: journey,
+      seat: seat,
+      origin_station: origin_station,
+      destination_station: destination_station,
+      passenger_name: booking_params[:passenger_name],
+      expected_seat_version: booking_params[:expected_seat_version]
     ).call
 
     status = result.success? ? :created : (result.status == :conflict ? :conflict : :unprocessable_entity)
-    body = result.success? ? BookingSerializer.new(result.booking).as_json : { error: result.error }
+    body = result.success? ? booking_payload(result.booking) : { error: result.error }
 
-    IdempotencyKey.create!(key: key, request_hash: Digest::SHA256.hexdigest(params.to_json),
-                            response_status: status, response_body: body) if key.present?
+    IdempotencyKey.create!(
+      key: key,
+      request_hash: Digest::SHA256.hexdigest(params.to_json),
+      response_status: status,
+      response_body: body
+    ) if key.present?
 
     render json: body, status: status
+  end
+
+  private
+
+  def journey
+    @journey ||= Journey.find(params[:journey_id])
+  end
+
+  def seat
+    @seat ||= Seat.find(booking_params[:seat_id])
+  end
+
+  def origin_station
+    @origin_station ||= Station.find(booking_params[:origin_station_id])
+  end
+
+  def destination_station
+    @destination_station ||= Station.find(booking_params[:destination_station_id])
+  end
+
+  def booking_params
+    params.permit(:seat_id, :origin_station_id, :destination_station_id, :passenger_name, :expected_seat_version)
+  end
+
+  def booking_payload(booking)
+    {
+      id: booking.id,
+      passenger_name: booking.passenger_name,
+      fare: booking.fare,
+      status: booking.status,
+      journey_id: booking.journey_id,
+      seat_id: booking.seat_id
+    }
   end
 end
