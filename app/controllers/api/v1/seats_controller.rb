@@ -1,4 +1,4 @@
-class SeatsController < ApplicationController
+class Api::V1::SeatsController < ApplicationController
   def show
     seat = Seat.find(params[:id])
     etag = SeatVersionService.new(seat).version
