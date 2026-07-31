@@ -6,7 +6,7 @@ class SeatAvailabilityService
 
   def available_seats
     Seat.joins(coach: :train)
-        .where(coaches: { train_id: @journey.train_id, coach_type: "reserved" })
+        .where(coaches: { train_id: @journey.train_id, coach_type: :reserved })
         .where.not(
           id: Booking.confirmed_only
                      .where(journey: @journey)
