@@ -1,0 +1,34 @@
+The Challenge: Segment-Based Train Seat Booking System
+Your task is to build a booking system for Sri Lanka's Colombo Fort–Badulla line — one of the world's most celebrated scenic train journeys — that lets a single reserved seat be booked independently for multiple, non-overlapping legs of the same journey.
+Background: The line runs with 8 coaches: 3 reserved (every seat must be booked in advance) and 5 unreserved (first-come-first-served, no seat assignment). Reserved coaches are frequently under-occupied for long stretches of the route, since many passengers disembark partway through the journey, while the unreserved coaches are frequently overcrowded. Fares reflect this rigidity too: a passenger booking a reserved seat from, say, Colombo Fort to Kandy pays roughly double what a passenger takes for that same partial leg in an unreserved coach — the department's reasoning being that the fare has to cover the seat sitting empty for the rest of the journey (Kandy to Badulla), since under the current system that seat can't be resold once the train has departed. Leadership believes there's revenue being left on the table and cost being passed unfairly to some passengers, but hasn't committed to a fix.
+Core Requirements:
+Segment-based booking:
+A seat vacated partway through the trip should become available again for someone else — for example, one passenger travels Colombo Fort → Kandy and another travels Kandy → Badulla on the same physical seat, each charged only for the distance they actually travel.
+You decide how to model segment occupancy, calculate fares, and guarantee correctness when multiple people try to book overlapping or adjacent legs of the same seat at the same time — and should be ready to justify those choices.
+Backend:
+An API that manages stations, seats, and bookings, and correctly handles concurrent booking attempts on the same seat.
+Frontend:
+A way to select an origin and destination, see which seats are available for that specific leg, and book one.
+Build it for real:
+Build it as though it could genuinely be launched as a real application one day, not a disposable proof of concept. Treat the number of coaches, seats per coach, and stations as configurable rather than hardcoded, since the department could add coaches or extend the route in the future.
+Running the project:
+The project should run in one shot from a clean machine — a docker-compose up (or equivalent single-command setup) is recommended, with clear, step-by-step instructions for anything that can't be automated away.
+Version Control:
+Use version control while working on the project (e.g. GitHub).
+Please ensure the repository is public — it's fine to keep it private while you work and make it public only when you submit. We'd like to see your commit history and how you progressed through the project.
+Extra Credit (Optional):
+If you have time and want to showcase more of your skills, consider implementing any of the following (or feel free to be creative with your own ideas):
+A seat map visualization.
+Waitlisting for fully booked segments.
+A simple admin view for the department (occupancy, revenue, etc.).
+Clearer handling of booking conflicts in the UI (loading states, real-time availability, etc.).
+Fare logic beyond simple distance-based pricing.
+If you implement something here, briefly explain the problem it addresses, your solution, and the design behind it in your submission notes.
+Submission:
+Please submit by Tuesday, August 4th, 2026, 11:59 PM through the following form:
+[SUBMISSION FORM LINK]
+Your Github repo should have a README that includes your core design decisions and the reasoning behind them — including alternatives you considered and why you didn't go with them — any challenges you faced, and (if applicable) a brief write-up of any Extra Credit features you built.
+Important Notes:
+Real-World Approach: Treat this as you would a task in a professional setting. Use any frameworks, libraries, or AI-powered assistants you find helpful. The key is that you understand what you've implemented and can explain your choices — you should expect to walk through your design and extend it live afterward.
+Secrets: Please don't commit database credentials or other secrets to version control — use environment variables or another secure method.
+Focus: Core requirements come first. A focused, well-reasoned core beats an impressive list of extras — make sure that's solid before spending time on Extra Credit.
