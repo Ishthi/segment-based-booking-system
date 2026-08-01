@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 
-type Section = 'stations' | 'journeys' | 'bookings' | 'trains'
+type Section = 'stations' | 'bookings' | 'trains'
 
 type Station = {
   id: number
@@ -26,12 +26,6 @@ type Seat = {
   id: number
   seat_number: string
   coach_id: number
-}
-
-type Journey = {
-  id: number
-  travel_date: string
-  train_id: number
 }
 
 type AvailableSeat = {
@@ -76,14 +70,12 @@ function App() {
   const [seats, setSeats] = useState<Seat[]>([])
   const [seatForm, setSeatForm] = useState({ seat_number: '' })
 
-  const [journeys, setJourneys] = useState<Journey[]>([])
-  const [journeyForm, setJourneyForm] = useState({ id: '', train_id: '', travel_date: '' })
-
   const [selectedTrainId, setSelectedTrainId] = useState('')
   const [selectedCoachId, setSelectedCoachId] = useState('')
 
   const [bookingForm, setBookingForm] = useState({
-    journey_id: '',
+    train_id: '',
+    travel_date: '',
     origin_station_id: '',
     destination_station_id: '',
     seat_id: '',
@@ -96,7 +88,6 @@ function App() {
   useEffect(() => {
     loadStations()
     loadTrains()
-    loadJourneys()
   }, [])
 
   useEffect(() => {
@@ -125,11 +116,6 @@ function App() {
   const loadTrains = async () => {
     const data = await requestJson<Train[]>(`${API_BASE}/trains`)
     setTrains(data)
-  }
-
-  const loadJourneys = async () => {
-    const data = await requestJson<Journey[]>(`${API_BASE}/journeys`)
-    setJourneys(data)
   }
 
   const loadCoaches = async (trainId: string) => {
@@ -275,36 +261,16 @@ function App() {
     }
   }
 
-  const handleJourneySubmit = async (event: FormEvent) => {
-    event.preventDefault()
-    try {
-      await requestJson<Journey>(`${API_BASE}/journeys`, {
-        method: 'POST',
-        body: JSON.stringify({
-          journey: {
-            train_id: Number(journeyForm.train_id),
-            travel_date: journeyForm.travel_date,
-          },
-        }),
-      })
-
-      setJourneyForm({ id: '', train_id: '', travel_date: '' })
-      await loadJourneys()
-    } catch (error) {
-      alert(error instanceof Error ? error.message : 'Journey save failed')
-    }
-  }
-
   const handleBookingSearch = async () => {
-    if (!bookingForm.journey_id || !bookingForm.origin_station_id || !bookingForm.destination_station_id) {
-      alert('Choose journey, origin, and destination first')
+    if (!bookingForm.origin_station_id || !bookingForm.destination_station_id) {
+      alert('Choose origin, and destination first')
       return
     }
 
     try {
-      const data = await requestJson<AvailableSeat[]>(
-        `${API_BASE}/journeys/${bookingForm.journey_id}/availability?origin_station_id=${bookingForm.origin_station_id}&destination_station_id=${bookingForm.destination_station_id}`,
-      )
+    const data = await requestJson<AvailableSeat[]>(
+      `${API_BASE}/availability?train_id=${bookingForm.train_id}&travel_date=${bookingForm.travel_date}&origin_station_id=${bookingForm.origin_station_id}&destination_station_id=${bookingForm.destination_station_id}`,
+    )
       setAvailableSeats(data)
       setBookingMessage('Available seats loaded')
     } catch (error) {
@@ -314,17 +280,19 @@ function App() {
 
   const handleBookingSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    if (!bookingForm.journey_id || !bookingForm.seat_id || !bookingForm.origin_station_id || !bookingForm.destination_station_id) {
-      alert('Select journey, origin, destination, and seat')
+    if (!bookingForm.seat_id || !bookingForm.origin_station_id || !bookingForm.destination_station_id) {
+      alert('Select origin, destination, and seat')
       return
     }
-
+    
     try {
       const res = await requestJson<{ id: number; passenger_name: string; fare: number }>(
-        `${API_BASE}/journeys/${bookingForm.journey_id}/bookings`,
+        `${API_BASE}/bookings`,
         {
           method: 'POST',
           body: JSON.stringify({
+            train_id: Number(bookingForm.train_id),
+            travel_date: bookingForm.travel_date,
             passenger_name: bookingForm.passenger_name,
             seat_id: Number(bookingForm.seat_id),
             origin_station_id: Number(bookingForm.origin_station_id),
@@ -348,9 +316,6 @@ function App() {
         <h2>Admin Console</h2>
         <button className={activeSection === 'stations' ? 'active' : ''} onClick={() => setActiveSection('stations')}>
           Stations
-        </button>
-        <button className={activeSection === 'journeys' ? 'active' : ''} onClick={() => setActiveSection('journeys')}>
-          Journeys
         </button>
         <button className={activeSection === 'bookings' ? 'active' : ''} onClick={() => setActiveSection('bookings')}>
           Booking Create
@@ -402,13 +367,14 @@ function App() {
           </section>
         )}
 
-        {activeSection === 'journeys' && (
+        {activeSection === 'bookings' && (
           <section className="panel">
-            <h1>Journeys CRUD</h1>
-            <form onSubmit={handleJourneySubmit}>
+            <h1>Booking Create Page</h1>
+
+            <form onSubmit={handleBookingSubmit}>
               <select
-                value={journeyForm.train_id}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) => setJourneyForm({ ...journeyForm, train_id: event.target.value })}
+                value={bookingForm.train_id}
+                onChange={(event) => setBookingForm({ ...bookingForm, train_id: event.target.value })}
                 required
               >
                 <option value="">Select train</option>
@@ -421,49 +387,10 @@ function App() {
 
               <input
                 type="date"
-                value={journeyForm.travel_date}
-                onChange={(event: ChangeEvent<HTMLInputElement>) => setJourneyForm({ ...journeyForm, travel_date: event.target.value })}
+                value={bookingForm.travel_date}
+                onChange={(event) => setBookingForm({ ...bookingForm, travel_date: event.target.value })}
                 required
               />
-
-              <button type="submit">Create journey</button>
-            </form>
-
-            <ul className="list">
-              {journeys.map((journey) => {
-                const trainName = trains.find((train) => train.id === journey.train_id)?.name ?? 'Unknown'
-
-                return (
-                  <li key={journey.id}>
-                    <strong>Journey</strong> Train {trainName} — {journey.travel_date}
-                  </li>
-                )
-              })}
-            </ul>
-          </section>
-        )}
-
-        {activeSection === 'bookings' && (
-          <section className="panel">
-            <h1>Booking Create Page</h1>
-
-            <form onSubmit={handleBookingSubmit}>
-              <select
-                value={bookingForm.journey_id}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) => setBookingForm({ ...bookingForm, journey_id: event.target.value })}
-                required
-              >
-                <option value="">Select journey</option>
-               {journeys.map((journey) => {
-                  const trainName = trains.find((train) => train.id === journey.train_id)?.name ?? 'Unknown'
-
-                  return (
-                    <option key={journey.id} value={journey.id}>
-                      {trainName} — {journey.travel_date}
-                    </option>
-                  )
-                })}
-              </select>
 
               <select
                 value={bookingForm.origin_station_id}
