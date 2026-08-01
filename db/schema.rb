@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_07_31_195619) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_01_125431) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -19,19 +19,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_195619) do
     t.datetime "created_at", null: false
     t.bigint "destination_station_id", null: false
     t.decimal "fare", precision: 10, scale: 2, null: false
-    t.bigint "journey_id", null: false
     t.bigint "origin_station_id", null: false
     t.string "passenger_name", null: false
     t.bigint "seat_id", null: false
     t.int4range "segment_range", null: false
     t.string "status", default: "confirmed", null: false
+    t.bigint "train_id"
+    t.date "travel_date"
     t.datetime "updated_at", null: false
     t.index ["destination_station_id"], name: "index_bookings_on_destination_station_id"
-    t.index ["journey_id"], name: "index_bookings_on_journey_id"
     t.index ["origin_station_id"], name: "index_bookings_on_origin_station_id"
-    t.index ["seat_id", "journey_id"], name: "index_bookings_on_seat_id_and_journey_id"
     t.index ["seat_id"], name: "index_bookings_on_seat_id"
-    t.exclusion_constraint "seat_id WITH =, journey_id WITH =, segment_range WITH &&", where: "(status)::text = 'confirmed'::text", using: :gist, name: "no_overlapping_bookings_per_seat"
   end
 
   create_table "coaches", force: :cascade do |t|
@@ -88,10 +86,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_07_31_195619) do
     t.index ["name"], name: "index_trains_on_name", unique: true
   end
 
-  add_foreign_key "bookings", "journeys"
   add_foreign_key "bookings", "seats"
   add_foreign_key "bookings", "stations", column: "destination_station_id"
   add_foreign_key "bookings", "stations", column: "origin_station_id"
+  add_foreign_key "bookings", "trains", validate: false
   add_foreign_key "coaches", "trains"
   add_foreign_key "idempotency_keys", "bookings"
   add_foreign_key "journeys", "trains"
