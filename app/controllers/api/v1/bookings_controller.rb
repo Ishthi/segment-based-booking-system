@@ -10,7 +10,8 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
     end
 
     result = BookingService.new(
-      journey: journey,
+      train: train,
+      travel_date: travel_date,
       seat: seat,
       origin_station: origin_station,
       destination_station: destination_station,
@@ -33,8 +34,12 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
 
   private
 
-  def journey
-    @journey ||= Journey.find(params[:journey_id])
+  def train
+    @train ||= Train.find(booking_params[:train_id])
+  end
+
+  def travel_date
+    @travel_date ||= Date.parse(booking_params[:travel_date].to_s)
   end
 
   def seat
@@ -50,7 +55,7 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
   end
 
   def booking_params
-    params.permit(:seat_id, :origin_station_id, :destination_station_id, :passenger_name, :expected_seat_version)
+    params.permit(:train_id, :travel_date, :seat_id, :origin_station_id, :destination_station_id, :passenger_name, :expected_seat_version)
   end
 
   def booking_payload(booking)
@@ -58,8 +63,8 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
       id: booking.id,
       passenger_name: booking.passenger_name,
       fare: booking.fare,
-      status: booking.status,
-      journey_id: booking.journey_id,
+      train_id: booking.train_id,
+      travel_date: booking.travel_date,
       seat_id: booking.seat_id
     }
   end
