@@ -8,17 +8,14 @@ Rails.application.routes.draw do
   namespace :api do
     namespace :v1 do
       resources :stations
-
       resources :trains do
-        resources :coaches, only: [ :index, :show, :create, :update, :destroy ] do
-          resources :seats, only: [ :index, :show, :create, :update, :destroy ]
+        resources :coaches do
+          resources :seats
         end
       end
 
-      resources :journeys, only: [ :index, :show, :create ] do
-        resource :availability, only: :show, controller: "seat_availability"
-        resources :bookings, only: :create
-      end
+      resources :bookings, only: :create
+      get "availability", to: "seat_availability#show"
     end
   end
 end
