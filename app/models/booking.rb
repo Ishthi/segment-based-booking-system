@@ -1,6 +1,6 @@
 class Booking < ApplicationRecord
   belongs_to :train
-  belongs_to :seat
+  belongs_to :seat, optional: true
   belongs_to :origin_station, class_name: "Station", inverse_of: :bookings_as_origin
   belongs_to :destination_station, class_name: "Station", inverse_of: :bookings_as_destination
 
