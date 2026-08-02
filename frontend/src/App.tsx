@@ -37,7 +37,8 @@ type AvailableSeat = {
   id: number
   coach: number
   number: string
-  version: number
+  // SeatVersionService returns "empty" or a SHA256 digest, never a number.
+  version: string
 }
 
 type CoachType = 'reserved' | 'unreserved'
@@ -520,6 +521,10 @@ function App() {
       return
     }
 
+    // Send back the version this seat had when availability was loaded, so the API can
+    // reject the booking if it changed in the meantime.
+    const selectedSeat = availableSeats.find((seat) => String(seat.id) === bookingForm.seat_id)
+
     try {
       await requestJson(
         `${API_BASE}/bookings`,
@@ -530,6 +535,7 @@ function App() {
             travel_date: bookingForm.travel_date,
             passenger_name: bookingForm.passenger_name,
             seat_id: bookingForm.seat_id ? Number(bookingForm.seat_id) : null,
+            expected_seat_version: selectedSeat?.version ?? null,
             coach_type: selectedCoachType,
             origin_station_id: Number(bookingForm.origin_station_id),
             destination_station_id: Number(bookingForm.destination_station_id),
