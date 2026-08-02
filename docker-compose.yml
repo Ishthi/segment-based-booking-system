@@ -1,20 +1,26 @@
 # Development stack: clone the repo, run `docker compose up`, open http://localhost:5173
 #
-# Credentials below are local-only defaults rather than ${VARS} on purpose: .env is
-# gitignored, so a fresh clone has none and compose interpolation would resolve to
-# empty strings.
+# Database credentials come from the environment. The `:-` defaults keep a fresh
+# clone working with no setup (.env is gitignored, so a reviewer has none); override
+# any of them by exporting the variable or putting it in a local .env file.
+#
+#   POSTGRES_USER  POSTGRES_PASSWORD  POSTGRES_DB
+#
+# These names are deliberately distinct from the DB_* variables in .env.example,
+# which point at a host PostgreSQL — reusing those would inject host values
+# (localhost, your macOS username) into the container's DATABASE_URL and break it.
 
 services:
   db:
     image: postgres:17-alpine
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: segment_based_booking_system_development
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-segment_based_booking_system_development}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-segment_based_booking_system_development}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -28,8 +34,9 @@ services:
     environment:
       RAILS_ENV: development
       # Rails merges DATABASE_URL over config/database.yml, so no YAML change is needed.
-      DATABASE_URL: postgres://postgres:postgres@db:5432/segment_based_booking_system_development
-      RAILS_MAX_THREADS: 5
+      # Built from the same variables as the db service so the two cannot drift.
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-segment_based_booking_system_development}
+      RAILS_MAX_THREADS: ${RAILS_MAX_THREADS:-5}
     ports:
       - "3000:3000"
     volumes:
