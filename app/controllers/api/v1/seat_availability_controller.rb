@@ -5,23 +5,39 @@ class Api::V1::SeatAvailabilityController < Api::V1::ApplicationController
     destination = Station.find(params[:destination_station_id])
     travel_date = Date.parse(params[:travel_date].to_s)
 
-    seats = SeatAvailabilityService.new(
+    coach_groups = SeatAvailabilityService.new(
       train_id: train.id,
       travel_date: travel_date,
       origin_station: origin,
       destination_station: destination
-    ).available_seats
+    ).coach_availability
 
-    payload = seats.map do |seat|
+    payload = coach_groups.map do |coach|
       {
-        id: seat.id,
-        coach: seat.coach.coach_number,
-        number: seat.seat_number,
-        version: SeatVersionService.new(seat).version
+        coach_id: coach[:coach_id],
+        coach_number: coach[:coach_number],
+        coach_type: coach[:coach_type],
+        available_seat_count: coach[:available_seat_count],
+        label: if coach[:coach_type] == "reserved"
+                 coach[:available_seat_count].zero? ? "All seats booked" : nil
+               else
+                 coach[:available_seat_count].zero? ? "Standing allowed" : nil
+               end,
+        seats: coach[:seats].map do |seat|
+          {
+            id: seat.id,
+            coach: seat.coach.coach_number,
+            number: seat.seat_number,
+            version: SeatVersionService.new(seat).version
+          }
+        end
       }
     end
 
-    fresh_when(etag: payload.map { |s| "#{s[:id]}:#{s[:version]}" }.join(","), public: false)
-    render json: payload
+    etag = payload.map { |c| "#{c[:coach_id]}:#{c[:available_seat_count]}" }.join(",")
+
+    if stale?(etag: etag, public: false)
+      render json: payload
+    end
   end
 end
