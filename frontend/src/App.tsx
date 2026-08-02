@@ -1,6 +1,6 @@
 import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react'
 
-type Section = 'stations' | 'bookings' | 'trains'
+type Section = 'stations' | 'bookings' | 'trains' | 'visualization'
 
 type Station = {
   id: number
@@ -17,9 +17,14 @@ type Train = {
 type Coach = {
   id: number
   coach_number: number
-  coach_type: string
+  coach_type: CoachType
   seat_count: number
   train_id: number
+}
+
+type CoachSeats = {
+  coach: Coach
+  seats: Seat[]
 }
 
 type Seat = {
@@ -99,6 +104,18 @@ function App() {
   const [selectedCoachId, setSelectedCoachId] = useState<string | null>(null)
   const [availabilityLoading, setAvailabilityLoading] = useState(false)
 
+  const [visualizationTrainId, setVisualizationTrainId] = useState('')
+  const [visualizationJourney, setVisualizationJourney] = useState({
+    travel_date: '',
+    origin_station_id: '',
+    destination_station_id: '',
+  })
+  const [visualizationAvailability, setVisualizationAvailability] = useState<CoachAvailability[] | null>(null)
+  const [visualizationCoaches, setVisualizationCoaches] = useState<Coach[]>([])
+  const [visualizationCoachType, setVisualizationCoachType] = useState<CoachType | null>(null)
+  const [visualizationSeats, setVisualizationSeats] = useState<CoachSeats[]>([])
+  const [visualizationLoading, setVisualizationLoading] = useState(false)
+
   const [bookingForm, setBookingForm] = useState({ ...EMPTY_BOOKING_FORM })
   const [availableSeats, setAvailableSeats] = useState<AvailableSeat[]>([])
   const [bookingMessage, setBookingMessage] = useState('')
@@ -134,6 +151,147 @@ function App() {
       setSeats([])
     }
   }, [selectedCoachId, selectedTrainId])
+
+  useEffect(() => {
+    if (!visualizationTrainId) {
+      setVisualizationCoaches([])
+      setVisualizationCoachType(null)
+      setVisualizationSeats([])
+      return
+    }
+
+    let cancelled = false
+
+    const loadVisualizationCoaches = async () => {
+      setVisualizationLoading(true)
+      setVisualizationCoachType(null)
+      setVisualizationSeats([])
+
+      try {
+        const data = await requestJson<Coach[]>(`${API_BASE}/trains/${visualizationTrainId}/coaches`)
+        if (!cancelled) setVisualizationCoaches(data)
+      } catch (error) {
+        if (!cancelled) {
+          setVisualizationCoaches([])
+          alert(error instanceof Error ? error.message : 'Could not load coaches')
+        }
+      } finally {
+        if (!cancelled) setVisualizationLoading(false)
+      }
+    }
+
+    loadVisualizationCoaches()
+
+    return () => {
+      cancelled = true
+    }
+  }, [visualizationTrainId])
+
+  const stationsBySequence = [...stations].sort((a, b) => a.sequence - b.sequence)
+
+  const findStation = (stationId: string) => stations.find((station) => String(station.id) === stationId)
+
+  const destinationOptions = (originStationId: string) => {
+    const origin = findStation(originStationId)
+    if (!origin) return []
+
+    return stationsBySequence.filter((station) => station.sequence > origin.sequence)
+  }
+
+  // Changing the origin can strand an already-picked destination behind it, so drop it when that happens.
+  const applyOriginChange = <T extends { origin_station_id: string; destination_station_id: string }>(
+    form: T,
+    originStationId: string,
+  ): T => {
+    const origin = findStation(originStationId)
+    const destination = findStation(form.destination_station_id)
+    const destinationStillAhead = Boolean(origin && destination && destination.sequence > origin.sequence)
+
+    return {
+      ...form,
+      origin_station_id: originStationId,
+      destination_station_id: destinationStillAhead ? form.destination_station_id : '',
+    }
+  }
+
+  const journeySelected = Boolean(
+    visualizationTrainId &&
+      visualizationJourney.travel_date &&
+      visualizationJourney.origin_station_id &&
+      visualizationJourney.destination_station_id &&
+      visualizationJourney.origin_station_id !== visualizationJourney.destination_station_id,
+  )
+
+  useEffect(() => {
+    if (!journeySelected) {
+      setVisualizationAvailability(null)
+      return
+    }
+
+    let cancelled = false
+
+    const loadVisualizationAvailability = async () => {
+      try {
+        const data = await requestJson<CoachAvailability[]>(
+          `${API_BASE}/availability?train_id=${visualizationTrainId}&travel_date=${visualizationJourney.travel_date}&origin_station_id=${visualizationJourney.origin_station_id}&destination_station_id=${visualizationJourney.destination_station_id}`,
+        )
+        if (!cancelled) setVisualizationAvailability(data)
+      } catch (error) {
+        if (!cancelled) {
+          setVisualizationAvailability(null)
+          alert(error instanceof Error ? error.message : 'Could not load availability')
+        }
+      }
+    }
+
+    loadVisualizationAvailability()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    journeySelected,
+    visualizationTrainId,
+    visualizationJourney.travel_date,
+    visualizationJourney.origin_station_id,
+    visualizationJourney.destination_station_id,
+  ])
+
+  const availableSeatIds = new Set(
+    (visualizationAvailability ?? []).flatMap((coach) => coach.seats.map((seat) => seat.id)),
+  )
+
+  const visualizationSummary = (coachType: CoachType) => {
+    const group = visualizationCoaches.filter((coach) => coach.coach_type === coachType)
+    const availabilityGroup = (visualizationAvailability ?? []).filter((coach) => coach.coach_type === coachType)
+
+    return {
+      coaches: group,
+      coachCount: group.length,
+      seatCount: group.reduce((total, coach) => total + coach.seat_count, 0),
+      freeSeatCount: availabilityGroup.reduce((total, coach) => total + coach.available_seat_count, 0),
+    }
+  }
+
+  const handleVisualizationTypeSelect = async (coachType: CoachType) => {
+    const { coaches: group } = visualizationSummary(coachType)
+
+    setVisualizationCoachType(coachType)
+    setVisualizationSeats([])
+    setVisualizationLoading(true)
+
+    try {
+      const seatsPerCoach = await Promise.all(
+        group.map((coach) => requestJson<Seat[]>(`${API_BASE}/trains/${visualizationTrainId}/coaches/${coach.id}/seats`)),
+      )
+
+      setVisualizationSeats(group.map((coach, index) => ({ coach, seats: seatsPerCoach[index] })))
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not load seats')
+    } finally {
+      setVisualizationLoading(false)
+    }
+  }
 
   const loadStations = async () => {
     const data = await requestJson<Station[]>(`${API_BASE}/stations`)
@@ -398,6 +556,9 @@ function App() {
          <button className={activeSection === 'trains' ? 'active' : ''} onClick={() => setActiveSection('trains')}>
           Trains / Coaches / Seats
         </button>
+        <button className={activeSection === 'visualization' ? 'active' : ''} onClick={() => setActiveSection('visualization')}>
+          Seat Visualization
+        </button>
         <button className={activeSection === 'bookings' ? 'active' : ''} onClick={() => setActiveSection('bookings')}>
           Booking Create
         </button>
@@ -445,6 +606,157 @@ function App() {
           </section>
         )}
 
+        {activeSection === 'visualization' && (
+          <section className="panel">
+            <h1>Seat Visualization</h1>
+
+            <select
+              className="train-picker"
+              value={visualizationTrainId}
+              onChange={(event: ChangeEvent<HTMLSelectElement>) => setVisualizationTrainId(event.target.value)}
+            >
+              <option value="">Select train</option>
+              {trains.map((train) => (
+                <option key={train.id} value={train.id}>
+                  {train.name}
+                </option>
+              ))}
+            </select>
+
+            {visualizationTrainId && (
+              <div className="visualization-filters">
+                <input
+                  type="date"
+                  value={visualizationJourney.travel_date}
+                  onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                    setVisualizationJourney({ ...visualizationJourney, travel_date: event.target.value })
+                  }
+                />
+                <select
+                  value={visualizationJourney.origin_station_id}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                    setVisualizationJourney(applyOriginChange(visualizationJourney, event.target.value))
+                  }
+                >
+                  <option value="">Origin station</option>
+                  {stationsBySequence.map((station) => (
+                    <option key={station.id} value={station.id}>
+                      {station.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={visualizationJourney.destination_station_id}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                    setVisualizationJourney({ ...visualizationJourney, destination_station_id: event.target.value })
+                  }
+                  disabled={!visualizationJourney.origin_station_id}
+                >
+                  <option value="">
+                    {visualizationJourney.origin_station_id ? 'Destination station' : 'Select origin first'}
+                  </option>
+                  {destinationOptions(visualizationJourney.origin_station_id).map((station) => (
+                    <option key={station.id} value={station.id}>
+                      {station.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {!visualizationTrainId && <p>Select a train to see its coaches.</p>}
+
+            {visualizationTrainId && !journeySelected && (
+              <p>Pick a date, origin and destination to see which seats are booked.</p>
+            )}
+
+            {visualizationTrainId && visualizationCoaches.length > 0 && (
+              <div className="coach-tiles">
+                {COACH_TYPES.map((coachType) => {
+                  const { coachCount, seatCount, freeSeatCount } = visualizationSummary(coachType)
+                  const isSelected = visualizationCoachType === coachType
+
+                  return (
+                    <button
+                      key={coachType}
+                      type="button"
+                      className={`coach-tile ${coachType}${isSelected ? ' selected' : ''}`}
+                      onClick={() => handleVisualizationTypeSelect(coachType)}
+                      disabled={coachCount === 0}
+                      aria-pressed={isSelected}
+                    >
+                      <span className="coach-tile-title">
+                        {coachType === 'reserved' ? 'Reserved' : 'Unreserved'} coach
+                      </span>
+                      <span className="coach-tile-count">
+                        {coachCount === 0
+                          ? 'No coaches on this train'
+                          : visualizationAvailability
+                            ? `${freeSeatCount} of ${seatCount} seats free`
+                            : `${seatCount} seats`}
+                      </span>
+                      <span className="coach-tile-meta">
+                        {coachCount} {coachCount === 1 ? 'coach' : 'coaches'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            {visualizationTrainId && !visualizationLoading && visualizationCoaches.length === 0 && (
+              <p>This train has no coaches yet.</p>
+            )}
+
+            {visualizationLoading && <p>Loading...</p>}
+
+            {visualizationCoachType && !visualizationLoading && (
+              <div className="seat-map">
+                {visualizationAvailability && (
+                  <div className="seat-legend">
+                    <span className={`seat-chip ${visualizationCoachType}`}>&nbsp;</span> Free
+                    <span className="seat-chip booked">&nbsp;</span> Booked
+                  </div>
+                )}
+
+                {visualizationSeats.map(({ coach, seats: coachSeats }) => {
+                  const bookedCount = visualizationAvailability
+                    ? coachSeats.filter((seat) => !availableSeatIds.has(seat.id)).length
+                    : 0
+
+                  return (
+                    <div key={coach.id} className="seat-map-coach">
+                      <h3>
+                        Coach {coach.coach_number} — {coach.coach_type} — {coachSeats.length} seats
+                        {visualizationAvailability ? ` — ${bookedCount} booked` : ''}
+                      </h3>
+                      {coachSeats.length > 0 ? (
+                        <div className="seat-grid">
+                          {coachSeats.map((seat) => {
+                            const isBooked = Boolean(visualizationAvailability) && !availableSeatIds.has(seat.id)
+
+                            return (
+                              <span
+                                key={seat.id}
+                                className={`seat-chip ${isBooked ? 'booked' : coach.coach_type}`}
+                                title={isBooked ? 'Booked on this segment' : 'Free'}
+                              >
+                                {seat.seat_number}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        <p>No seats created for this coach.</p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+        )}
+
         {activeSection === 'bookings' && (
           <section className="panel">
             <h1>Booking Create Page</h1>
@@ -472,11 +784,11 @@ function App() {
 
               <select
                 value={bookingForm.origin_station_id}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) => setBookingForm({ ...bookingForm, origin_station_id: event.target.value })}
+                onChange={(event: ChangeEvent<HTMLSelectElement>) => setBookingForm(applyOriginChange(bookingForm, event.target.value))}
                 required
               >
                 <option value="">Origin station</option>
-                {stations.map((station) => (
+                {stationsBySequence.map((station) => (
                   <option key={station.id} value={station.id}>
                     {station.name}
                   </option>
@@ -486,10 +798,13 @@ function App() {
               <select
                 value={bookingForm.destination_station_id}
                 onChange={(event: ChangeEvent<HTMLSelectElement>) => setBookingForm({ ...bookingForm, destination_station_id: event.target.value })}
+                disabled={!bookingForm.origin_station_id}
                 required
               >
-                <option value="">Destination station</option>
-                {stations.map((station) => (
+                <option value="">
+                  {bookingForm.origin_station_id ? 'Destination station' : 'Select origin first'}
+                </option>
+                {destinationOptions(bookingForm.origin_station_id).map((station) => (
                   <option key={station.id} value={station.id}>
                     {station.name}
                   </option>
