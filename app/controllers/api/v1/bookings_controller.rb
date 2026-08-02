@@ -1,6 +1,6 @@
 class Api::V1::BookingsController < Api::V1::ApplicationController
   def create
-    key = request.headers["Idempotency-Key"]
+    key = request.headers["Idempotency-Key"].presence || request.headers["HTTP_IDEMPOTENCY_KEY"].presence
 
     if key.present?
       existing = IdempotencyKey.find_by(key: key)
@@ -13,6 +13,7 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
       train: train,
       travel_date: travel_date,
       seat: seat,
+      coach_type: booking_params[:coach_type],
       origin_station: origin_station,
       destination_station: destination_station,
       passenger_name: booking_params[:passenger_name],
@@ -22,12 +23,15 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
     status = result.success? ? :created : (result.status == :conflict ? :conflict : :unprocessable_entity)
     body = result.success? ? booking_payload(result.booking) : { error: result.error }
 
-    IdempotencyKey.create!(
-      key: key,
-      request_hash: Digest::SHA256.hexdigest(params.to_json),
-      response_status: status,
-      response_body: body
-    ) if key.present?
+    if key.present?
+      IdempotencyKey.create!(
+        key: key,
+        booking: result.booking,
+        request_hash: Digest::SHA256.hexdigest(params.to_json),
+        response_status: status,
+        response_body: body
+      )
+    end
 
     render json: body, status: status
   end
@@ -43,7 +47,12 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
   end
 
   def seat
-    @seat ||= Seat.find(booking_params[:seat_id])
+    return @seat if defined?(@seat)
+
+    seat_id = booking_params[:seat_id].presence
+    return nil if seat_id.blank?
+
+    @seat = Seat.find(seat_id)
   end
 
   def origin_station
@@ -55,7 +64,16 @@ class Api::V1::BookingsController < Api::V1::ApplicationController
   end
 
   def booking_params
-    params.permit(:train_id, :travel_date, :seat_id, :origin_station_id, :destination_station_id, :passenger_name, :expected_seat_version)
+    params.permit(
+      :train_id,
+      :travel_date,
+      :seat_id,
+      :coach_type,
+      :origin_station_id,
+      :destination_station_id,
+      :passenger_name,
+      :expected_seat_version
+    )
   end
 
   def booking_payload(booking)
