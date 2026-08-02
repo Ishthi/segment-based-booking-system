@@ -32,6 +32,8 @@ class Api::V1::ApplicationController < ActionController::API
   end
 
   def render_error(status:, message:, details: nil)
+    return if performed?
+
     payload = {
       code: Rack::Utils.status_code(status),
       message: message
