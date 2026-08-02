@@ -23,8 +23,8 @@ health check, so once the page loads the data is ready.
 | API | http://localhost:3000 | Rails in development mode |
 | Database | — | PostgreSQL 17, not published to the host |
 
-Seed data: 6 stations (Colombo Fort → Badulla), train `1005`, 8 coaches
-(3 reserved, 5 unreserved) and 44 seats.
+Seed data: 6 stations (Colombo Fort → Kandy → Hatton → Nanu Oya → Ella → Badulla),
+train `1005`, 8 coaches (3 reserved × 4 seats, 5 unreserved × 8 seats) and 52 seats.
 
 ### Everyday commands
 
