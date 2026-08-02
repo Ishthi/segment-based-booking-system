@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_01_134154) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_02_183416) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -30,6 +30,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_01_134154) do
     t.index ["destination_station_id"], name: "index_bookings_on_destination_station_id"
     t.index ["origin_station_id"], name: "index_bookings_on_origin_station_id"
     t.index ["seat_id"], name: "index_bookings_on_seat_id"
+    t.exclusion_constraint "seat_id WITH =, train_id WITH =, travel_date WITH =, segment_range WITH &&", where: "(status)::text = 'confirmed'::text", using: :gist, name: "no_overlapping_bookings_per_seat"
   end
 
   create_table "coaches", force: :cascade do |t|
