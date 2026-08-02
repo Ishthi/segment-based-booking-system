@@ -1,0 +1,12 @@
+# Host-built modules are darwin binaries; the image installs its own via npm ci.
+node_modules
+dist
+dist-ssr
+
+.git
+.gitignore
+Dockerfile*
+.dockerignore
+
+*.log
+.DS_Store

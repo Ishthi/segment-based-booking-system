@@ -1,0 +1,70 @@
+# Development stack: clone the repo, run `docker compose up`, open http://localhost:5173
+#
+# Credentials below are local-only defaults rather than ${VARS} on purpose: .env is
+# gitignored, so a fresh clone has none and compose interpolation would resolve to
+# empty strings.
+
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: segment_based_booking_system_development
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # Port 5432 is intentionally not published — it would collide with a local
+    # PostgreSQL install. Add "5433:5432" here if you want psql access.
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      RAILS_ENV: development
+      # Rails merges DATABASE_URL over config/database.yml, so no YAML change is needed.
+      DATABASE_URL: postgres://postgres:postgres@db:5432/segment_based_booking_system_development
+      RAILS_MAX_THREADS: 5
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/rails
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ./bin/rails server -b 0.0.0.0 -p 3000
+    healthcheck:
+      # /up is the Rails health endpoint already wired up in config/routes.rb.
+      test: ["CMD-SHELL", "curl -fs http://localhost:3000/up || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      # The browser runs on the host, so it reaches the API on the published port.
+      VITE_API_BASE: http://localhost:3000/api/v1
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      # Anonymous volume keeps the image's linux node_modules from being shadowed
+      # by the host's darwin build.
+      - /app/node_modules
+    depends_on:
+      api:
+        # Waits for db:prepare and seeding to finish, not just for the container to start.
+        condition: service_healthy
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+volumes:
+  pgdata:

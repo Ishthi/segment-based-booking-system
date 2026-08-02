@@ -1,0 +1,17 @@
+#!/bin/bash -e
+
+# Entrypoint for the development container (see docker-compose.yml).
+# Prepares the database and seeds it once, before the server starts accepting traffic.
+
+# The repo is bind-mounted, so a server.pid left behind by a host `rails server`
+# comes along with it and Rails would refuse to boot.
+rm -f tmp/pids/server.pid
+
+./bin/rails db:prepare
+
+# db/seeds.rb opens with Station.delete_all / Coach.delete_all / Seat.delete_all,
+# so it must only run on an empty database — otherwise every restart would wipe
+# bookings created through the UI.
+./bin/rails runner 'Rails.application.load_seed if Station.none?'
+
+exec "${@}"

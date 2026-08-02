@@ -37,3 +37,8 @@
 # Ignore Docker-related files
 /.dockerignore
 /Dockerfile*
+/docker-compose*.yml
+
+# Ignore frontend build artifacts — the frontend has its own image and build context.
+/frontend/node_modules
+/frontend/dist
