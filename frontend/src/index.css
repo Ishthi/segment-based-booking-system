@@ -120,6 +120,12 @@ button {
   font-weight: 600;
 }
 
+.train-picker {
+  display: block;
+  margin-bottom: 1.25rem;
+  min-width: 16rem;
+}
+
 .coach-tiles {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -174,4 +180,64 @@ button {
 .coach-tile-meta {
   font-size: 0.8rem;
   opacity: 0.85;
+}
+
+.seat-map {
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.seat-map-coach h3 {
+  margin: 0 0 0.6rem;
+  font-size: 1rem;
+  text-transform: capitalize;
+}
+
+.seat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.seat-chip {
+  min-width: 3rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: white;
+}
+
+.seat-chip.reserved {
+  background: #2563eb;
+}
+
+.seat-chip.unreserved {
+  background: #16a34a;
+}
+
+.seat-chip.booked {
+  background: #dc2626;
+}
+
+.visualization-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+}
+
+.seat-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.seat-legend .seat-chip {
+  min-width: 1.5rem;
+  padding: 0.35rem;
 }
