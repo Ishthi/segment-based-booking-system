@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_08_01_125431) do
+ActiveRecord::Schema[8.1].define(version: 2026_08_01_134154) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
@@ -21,7 +21,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_08_01_125431) do
     t.decimal "fare", precision: 10, scale: 2, null: false
     t.bigint "origin_station_id", null: false
     t.string "passenger_name", null: false
-    t.bigint "seat_id", null: false
+    t.bigint "seat_id"
     t.int4range "segment_range", null: false
     t.string "status", default: "confirmed", null: false
     t.bigint "train_id"
