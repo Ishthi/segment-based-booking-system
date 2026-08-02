@@ -35,6 +35,29 @@ type AvailableSeat = {
   version: number
 }
 
+type CoachType = 'reserved' | 'unreserved'
+
+type CoachAvailability = {
+  coach_id: number
+  coach_number: number
+  coach_type: CoachType
+  available_seat_count: number
+  label: string | null
+  seats: AvailableSeat[]
+}
+
+const COACH_TYPES: CoachType[] = ['reserved', 'unreserved']
+
+const EMPTY_BOOKING_FORM = {
+  train_id: '',
+  travel_date: '',
+  origin_station_id: '',
+  destination_station_id: '',
+  seat_id: '',
+  passenger_name: '',
+  expected_seat_version: '',
+}
+
 const API_BASE = 'http://localhost:3000/api/v1'
 
 async function requestJson<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -71,23 +94,27 @@ function App() {
   const [seatForm, setSeatForm] = useState({ seat_number: '' })
 
   const [selectedTrainId, setSelectedTrainId] = useState('')
-  const [selectedCoachId, setSelectedCoachId] = useState('')
+  const [coachAvailability, setCoachAvailability] = useState<CoachAvailability[]>([])
+  const [selectedCoachType, setSelectedCoachType] = useState<CoachType | null>(null)
+  const [selectedCoachId, setSelectedCoachId] = useState<string | null>(null)
+  const [availabilityLoading, setAvailabilityLoading] = useState(false)
 
-  const [bookingForm, setBookingForm] = useState({
-    train_id: '',
-    travel_date: '',
-    origin_station_id: '',
-    destination_station_id: '',
-    seat_id: '',
-    passenger_name: '',
-    expected_seat_version: '',
-  })
+  const [bookingForm, setBookingForm] = useState({ ...EMPTY_BOOKING_FORM })
   const [availableSeats, setAvailableSeats] = useState<AvailableSeat[]>([])
   const [bookingMessage, setBookingMessage] = useState('')
 
+  const [loading, setLoading] = useState(true)
+  
   useEffect(() => {
-    loadStations()
-    loadTrains()
+    const loadInitialData = async () => {
+      try {
+        await Promise.all([loadStations(), loadTrains()])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadInitialData()
   }, [])
 
   useEffect(() => {
@@ -96,13 +123,13 @@ function App() {
     } else {
       setCoaches([])
       setSeats([])
-      setSelectedCoachId('')
+      setSelectedCoachId(null)
     }
   }, [selectedTrainId])
 
   useEffect(() => {
     if (selectedCoachId && selectedTrainId) {
-      loadSeats(selectedTrainId, selectedCoachId)
+      loadSeats(selectedTrainId, selectedCoachId || '')
     } else {
       setSeats([])
     }
@@ -255,38 +282,88 @@ function App() {
       })
 
       setSeatForm({ seat_number: '' })
-      await loadSeats(selectedTrainId, selectedCoachId)
+      await loadSeats(selectedTrainId, selectedCoachId || '')
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Seat save failed')
     }
   }
 
   const handleBookingSearch = async () => {
-    if (!bookingForm.origin_station_id || !bookingForm.destination_station_id) {
-      alert('Choose origin, and destination first')
+    if (availabilityLoading) return
+
+    if (!bookingForm.train_id || !bookingForm.travel_date || !bookingForm.origin_station_id || !bookingForm.destination_station_id) {
+      alert('Choose train, date, origin and destination first')
       return
     }
 
     try {
-    const data = await requestJson<AvailableSeat[]>(
-      `${API_BASE}/availability?train_id=${bookingForm.train_id}&travel_date=${bookingForm.travel_date}&origin_station_id=${bookingForm.origin_station_id}&destination_station_id=${bookingForm.destination_station_id}`,
-    )
-      setAvailableSeats(data)
-      setBookingMessage('Available seats loaded')
+      setAvailabilityLoading(true)
+      setBookingMessage('Loading availability...')
+
+      const data = await requestJson<CoachAvailability[]>(
+        `${API_BASE}/availability?train_id=${bookingForm.train_id}&travel_date=${bookingForm.travel_date}&origin_station_id=${bookingForm.origin_station_id}&destination_station_id=${bookingForm.destination_station_id}`,
+      )
+
+      setCoachAvailability(data)
+      setSelectedCoachType(null)
+      setAvailableSeats([])
+      setBookingForm((form) => ({ ...form, seat_id: '' }))
+      setBookingMessage('Pick a coach type to see its seats')
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'Could not load seats')
+      setBookingMessage('')
+      alert(error instanceof Error ? error.message : 'Could not load coach availability')
+    } finally {
+      setAvailabilityLoading(false)
     }
+  }
+
+  const coachTypeSummary = (coachType: CoachType) => {
+    const group = coachAvailability.filter((coach) => coach.coach_type === coachType)
+
+    return {
+      coachCount: group.length,
+      availableSeatCount: group.reduce((total, coach) => total + coach.available_seat_count, 0),
+      seats: group.flatMap((coach) => coach.seats),
+    }
+  }
+
+  const handleCoachTypeSelect = (coachType: CoachType) => {
+    const { seats: typeSeats } = coachTypeSummary(coachType)
+
+    setSelectedCoachType(coachType)
+    setAvailableSeats(typeSeats)
+    setBookingForm((form) => ({ ...form, seat_id: '' }))
+    setBookingMessage(
+      typeSeats.length > 0
+        ? `${typeSeats.length} seats available in ${coachType} coaches`
+        : coachType === 'reserved'
+          ? 'All seats booked in reserved coaches'
+          : 'No seats left — standing allowed in unreserved coaches',
+    )
+  }
+
+  const resetBookingPage = () => {
+    setBookingForm({ ...EMPTY_BOOKING_FORM })
+    setCoachAvailability([])
+    setSelectedCoachType(null)
+    setAvailableSeats([])
   }
 
   const handleBookingSubmit = async (event: FormEvent) => {
     event.preventDefault()
-    if (!bookingForm.seat_id || !bookingForm.origin_station_id || !bookingForm.destination_station_id) {
-      alert('Select origin, destination, and seat')
+
+    if (!selectedCoachType) {
+      alert('Pick a reserved or unreserved coach first')
       return
     }
-    
+
+    if (selectedCoachType === 'reserved' && !bookingForm.seat_id) {
+      alert('Select a seat for reserved coach')
+      return
+    }
+
     try {
-      const res = await requestJson<{ id: number; passenger_name: string; fare: number }>(
+      await requestJson(
         `${API_BASE}/bookings`,
         {
           method: 'POST',
@@ -294,22 +371,23 @@ function App() {
             train_id: Number(bookingForm.train_id),
             travel_date: bookingForm.travel_date,
             passenger_name: bookingForm.passenger_name,
-            seat_id: Number(bookingForm.seat_id),
+            seat_id: bookingForm.seat_id ? Number(bookingForm.seat_id) : null,
+            coach_type: selectedCoachType,
             origin_station_id: Number(bookingForm.origin_station_id),
             destination_station_id: Number(bookingForm.destination_station_id),
-            expected_seat_version: bookingForm.expected_seat_version || undefined,
           }),
         },
       )
 
-      setBookingMessage(`Booking created for ${res.passenger_name} with fare ${res.fare}`)
-      setBookingForm({ ...bookingForm, seat_id: '', passenger_name: '', expected_seat_version: '' })
-      setAvailableSeats([])
+      resetBookingPage()
+      setBookingMessage('Booking created — ready for the next one')
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Booking failed')
     }
   }
-
+  if (loading) {
+    return <div className="app-shell"><p>Loading data...</p></div>
+  }
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -317,11 +395,11 @@ function App() {
         <button className={activeSection === 'stations' ? 'active' : ''} onClick={() => setActiveSection('stations')}>
           Stations
         </button>
+         <button className={activeSection === 'trains' ? 'active' : ''} onClick={() => setActiveSection('trains')}>
+          Trains / Coaches / Seats
+        </button>
         <button className={activeSection === 'bookings' ? 'active' : ''} onClick={() => setActiveSection('bookings')}>
           Booking Create
-        </button>
-        <button className={activeSection === 'trains' ? 'active' : ''} onClick={() => setActiveSection('trains')}>
-          Trains / Coaches / Seats
         </button>
       </aside>
 
@@ -418,28 +496,67 @@ function App() {
                 ))}
               </select>
 
-              <input
+            <button type="button" onClick={handleBookingSearch} disabled={availabilityLoading}>
+              {availabilityLoading ? 'Loading...' : 'Load available seats'}
+            </button>
+              {coachAvailability.length > 0 && (
+                <div className="coach-tiles">
+                  {COACH_TYPES.map((coachType) => {
+                    const { coachCount, availableSeatCount } = coachTypeSummary(coachType)
+                    const isSelected = selectedCoachType === coachType
+
+                    return (
+                      <button
+                        key={coachType}
+                        type="button"
+                        className={`coach-tile ${coachType}${isSelected ? ' selected' : ''}`}
+                        onClick={() => handleCoachTypeSelect(coachType)}
+                        disabled={coachCount === 0}
+                        aria-pressed={isSelected}
+                      >
+                        <span className="coach-tile-title">
+                          {coachType === 'reserved' ? 'Reserved' : 'Unreserved'} coach
+                        </span>
+                        <span className="coach-tile-count">
+                          {coachCount === 0
+                            ? 'No coaches on this train'
+                            : availableSeatCount > 0
+                              ? `${availableSeatCount} seats available`
+                              : coachType === 'reserved'
+                                ? 'All seats booked'
+                                : 'Standing allowed'}
+                        </span>
+                        <span className="coach-tile-meta">
+                          {coachCount} {coachCount === 1 ? 'coach' : 'coaches'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {selectedCoachType && (
+                <select
+                  value={bookingForm.seat_id}
+                  onChange={(event: ChangeEvent<HTMLSelectElement>) => setBookingForm({ ...bookingForm, seat_id: event.target.value })}
+                  required={selectedCoachType === 'reserved'}
+                >
+                  <option value="">
+                    {selectedCoachType === 'reserved' ? 'Select seat' : 'Select seat (optional)'}
+                  </option>
+                  {availableSeats.map((seat) => (
+                    <option key={seat.id} value={seat.id}>
+                      Coach {seat.coach} — Seat {seat.number}
+                    </option>
+                  ))}
+                </select>
+              )}
+               <input
                 value={bookingForm.passenger_name}
                 onChange={(event: ChangeEvent<HTMLInputElement>) => setBookingForm({ ...bookingForm, passenger_name: event.target.value })}
                 placeholder="Passenger name"
                 required
               />
-
-              <button type="button" onClick={handleBookingSearch}>
-                Load available seats
-              </button>
-
-              <select
-                value={bookingForm.seat_id}
-                onChange={(event: ChangeEvent<HTMLSelectElement>) => setBookingForm({ ...bookingForm, seat_id: event.target.value })}
-              >
-                <option value="">Select seat</option>
-                {availableSeats.map((seat) => (
-                  <option key={seat.id} value={seat.id}>
-                    Coach {seat.coach} — Seat {seat.number}
-                  </option>
-                ))}
-              </select>
 
               <button type="submit">Create booking</button>
             </form>
@@ -473,7 +590,7 @@ function App() {
                         <button type="button" onClick={() => handleTrainEdit(train)}>Edit</button>
                         <button type="button" onClick={() => handleTrainDelete(train.id)}>Delete</button>
                         <button type="button" onClick={() => setSelectedTrainId(String(train.id))}>
-                          Open
+                          Go to coaches
                         </button>
                       </div>
                     </li>
@@ -516,7 +633,7 @@ function App() {
                           Coach {coach.coach_number} — {coach.coach_type} — {coach.seat_count} seats
                           <div className="actions">
                             <button type="button" onClick={() => setSelectedCoachId(String(coach.id))}>
-                              Open seats
+                              Go to seats
                             </button>
                           </div>
                         </li>
