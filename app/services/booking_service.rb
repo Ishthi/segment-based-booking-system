@@ -13,7 +13,7 @@ class BookingService
   end
 
   def call
-    fare = FareCalculatorService.new(@origin, @destination).calculate
+    fare = FareCalculatorService.new(@origin, @destination, @coach_type).calculate
     range = (@origin.sequence...@destination.sequence)
 
     if @coach_type == "reserved" && @seat.blank?
