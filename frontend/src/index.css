@@ -119,3 +119,59 @@ button {
   color: #166534;
   font-weight: 600;
 }
+
+.coach-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.coach-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.25rem;
+  border-radius: 12px;
+  border: 2px solid transparent;
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.coach-tile.reserved {
+  background: #2563eb;
+}
+
+.coach-tile.unreserved {
+  background: #16a34a;
+}
+
+.coach-tile:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+.coach-tile.selected {
+  border-color: #111827;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.18);
+}
+
+.coach-tile:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.coach-tile-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.coach-tile-count {
+  font-size: 0.95rem;
+}
+
+.coach-tile-meta {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
