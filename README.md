@@ -315,7 +315,7 @@ grows quadratically with the route and there is no pricing rule in the brief tha
   an exclusion-constraint test that fires two overlapping inserts concurrently and asserts
   exactly one survives with a `409`, plus boundary tests for adjacent legs. Verification is
   currently the manual tour above, which is the weakest point of the submission.
-- **Idempotency is wired up but incomplete.** `Api::V1::BookingsController` reads an
+- **Idempotency is included up but incomplete.** `Api::V1::BookingsController` reads an
   `Idempotency-Key` header and reaches for `response_status` / `response_body` on
   `IdempotencyKey`, but those columns were never added, so sending that header would fail.
   Nothing in the frontend sends it, so the path is dormant rather than harmful — it needs
@@ -323,9 +323,6 @@ grows quadratically with the route and there is no pricing rule in the brief tha
 - **Standing tickets are unbounded.** An unreserved booking with no seat always succeeds;
   there is no capacity ceiling on standing passengers per segment. A real deployment would
   cap it against the coach's standing capacity.
-- **No cancellations, waitlisting, or admin reporting.** The `cancelled` status exists on
-  `Booking` and the constraint already ignores non-confirmed rows, so cancellation is a
-  small endpoint away; waitlisting and an occupancy/revenue view were the extra-credit items
-  I did not get to.
-- **No authentication.** Every endpoint is open, and the frontend is an unguarded admin
-  console. Fine for a review environment, not for a launch.
+- **No cancellations, waitlisting, or admin reporting.**.
+
+- **No authentication.** Every endpoint is open.
