@@ -144,3 +144,188 @@ The result is rounded to the nearest whole unit and saved on the booking, so a l
 rate change does not alter fares already sold. To change pricing, edit the two
 constants at the top of `app/services/fare_calculator_service.rb`. If a booking
 arrives with no coach type, the reserved rate applies.
+
+## Design decisions
+
+### Modelling a segment as an integer range over station sequence
+
+Every station carries a `sequence` (0, 1, 2 …) that fixes its position on the line. A
+booking stores `segment_range`, a PostgreSQL `int4range` built from
+`origin.sequence...destination.sequence` — a **half-open** range, `[origin, destination)`.
+Two legs conflict exactly when their ranges overlap, which is one operator (`&&`) rather
+than a hand-written comparison.
+
+Half-open is the detail that makes adjacent legs work. Colombo Fort → Kandy is `[0,1)`
+and Kandy → Badulla is `[1,5)`; they touch but do not overlap, so the same seat is sold
+twice. A closed range would have made them collide at station 1 and defeated the whole
+feature.
+
+*Alternatives considered:*
+
+- **Storing origin/destination IDs and comparing them in Ruby.** Simplest to read, but the
+  overlap test then lives in application code, cannot be indexed, and — crucially — cannot
+  be enforced by the database, so there is nothing to fall back on when two requests race.
+- **One row per seat per elementary segment** (a seat on a 6-station line occupies 5 rows,
+  one per hop). Overlap becomes a plain unique index, which is attractive. Rejected because
+  writes grow with route length, a booking is no longer one row, and cancelling or amending
+  a booking turns into a multi-row operation. The range keeps a booking atomic.
+- **A bitmask column, one bit per segment.** Compact and fast, but opaque to anyone reading
+  the data, and it silently breaks the moment the department extends the route past the
+  word size. The brief explicitly asks for a configurable number of stations.
+
+`distance_km` is kept separate from `sequence` on purpose: sequence answers *does this
+overlap*, distance answers *what does it cost*. Inserting a new station between two
+existing ones only requires renumbering sequences, without touching pricing.
+
+### Correctness under concurrent booking — three layers
+
+The interesting failure is two people buying the same seat on overlapping legs at the same
+instant. This is handled in three layers, deliberately, because each catches something the
+others cannot:
+
+1. **A pre-check in `BookingService`** — a range-overlap query against confirmed bookings
+   for that seat, train and date. This exists for the *user*, not for correctness: it
+   produces a clear `409 Conflict` with a readable message in the overwhelmingly common
+   non-racing case.
+2. **A GiST exclusion constraint** — `no_overlapping_bookings_per_seat` over
+   `(seat_id, train_id, travel_date, segment_range)` where `status = 'confirmed'`. This is
+   the actual guarantee. Two requests can both pass step 1 and race to insert; PostgreSQL
+   refuses the second one. `BookingService` rescues `PG::ExclusionViolation` and converts
+   it into the same `409` the pre-check would have produced, so a race and a normal clash
+   look identical to the client rather than surfacing a 500. The constraint needs the
+   `btree_gist` extension, because it mixes equality on scalar columns with `&&` on a range
+   — that extension is enabled in its own migration.
+3. **A seat version (optimistic concurrency)** — availability returns a digest of the
+   confirmed bookings for each seat; the client sends it back as `expected_seat_version`
+   and a mismatch is rejected. Layers 1 and 2 only stop *impossible* bookings. This layer
+   stops a *stale* one: the user loaded a seat map, someone else booked a different leg of
+   that seat, and the map on screen no longer reflects reality. The booking might still be
+   legal, but the passenger is choosing from information that has since changed, so they
+   are asked to reload.
+
+*Alternatives considered:*
+
+- **`SELECT … FOR UPDATE` on the seat row.** Works, and was the first instinct. Rejected
+  because it serialises every booking attempt on a seat behind one lock even when the legs
+  are disjoint — which is precisely the concurrency this system exists to unlock. It also
+  only protects code paths that remember to take the lock; the constraint protects the
+  table itself, including seeds, console sessions and future endpoints.
+- **`SERIALIZABLE` transaction isolation.** Correct, but it pushes retry handling into
+  every caller and costs throughput across the whole application to solve one table's
+  problem.
+- **Advisory locks keyed on seat + date.** Cheaper than row locks, but it is still mutual
+  exclusion in the application layer, with the same "only as good as the code that
+  remembers it" weakness, and a lock key collision fails silently.
+
+The exclusion constraint skips rows with a `NULL` `seat_id`, which is exactly right:
+standing tickets in unreserved coaches are not tied to a seat and must not conflict with
+anything.
+
+### Reserved and unreserved coaches in one model
+
+`Coach#coach_type` is an enum (`reserved` / `unreserved`) and `bookings.seat_id` is
+nullable. A reserved booking must name a seat — `BookingService` rejects it otherwise with
+`422`. An unreserved booking may name one, and a blank seat means a standing ticket.
+
+*Alternative considered:* separate tables or separate booking types for the two classes of
+travel. Rejected because everything else about them is identical — same fare formula shape,
+same segment semantics, same conflict rules — and splitting them would have duplicated the
+availability and booking paths to express one boolean.
+
+### Bookings carry train + travel date directly
+
+An early version had a `Journey` model (train + date) that bookings belonged to. It was
+migrated away in `MigrateJourneysToBookingTripDetails`: a journey record had no data of its
+own, so it added a mandatory write and a join to every booking and availability query in
+exchange for nothing. Bookings now carry `train_id` and `travel_date`, which is also what
+the exclusion constraint keys on.
+
+### Everything is configurable, nothing is counted in code
+
+Except for the booking fare amounts, stations, trains, coaches and seats are all CRUD resources. The number of coaches, seats
+per coach and stations on the line exist only as rows — the seed file happens to create the
+8 coaches and 6 stations from the brief, but nothing in the application knows those
+numbers. Adding a coach or extending the route past Badulla is data entry, not a deploy.
+
+### Service objects, thin controllers, versioned API
+
+Booking, availability, fare and seat versioning each live in their own service under
+[app/services/](app/services/); controllers parse params and choose a status code. Routes
+are namespaced under `/api/v1`, and a shared `Api::V1::ApplicationController` maps
+exceptions onto a single error envelope (`code`, `message`, optional `details`) so the
+frontend has one shape to handle.
+
+## Challenges
+
+**Turning a database error into an HTTP status.** Once the constraint was back, losing a
+race produced an `ActiveRecord::StatementInvalid` and a 500. The rescue in `BookingService`
+narrows on `e.cause.is_a?(PG::ExclusionViolation)` and re-raises anything else, so a genuine
+race maps to `409` without swallowing unrelated statement errors.
+
+**Distinguishing "unavailable" from "stale".** The exclusion constraint answers *is this
+booking legal*, not *was the screen the user booked from still accurate*. Those are
+different questions, and only the first is a database concern. The seat version digest is
+the answer to the second.
+
+## Extra credit
+
+### 1. Seat map visualization
+
+**Problem.** "Seat 4 of Coach 2 is booked" is not a true statement in this system — a seat
+is only booked *with respect to a leg on a date*. That makes availability much harder to
+reason about than in a whole-journey booking system, both for the department and for anyone
+evaluating whether segment booking actually works.
+
+**Solution.** A read-only view (**Seat Visualization**) that requires all four of train,
+date, origin and destination before it renders anything, because there is no meaningful
+seat map without them. It summarises the train as two tiles — Reserved and Unreserved, free
+out of total — and expanding either draws every coach of that type, with free seats in the
+type's colour and seats occupied on an overlapping leg in red.
+
+**Design.** The availability endpoint returns only *free* seats for the selected segment,
+so the view fetches the full seat list per coach and treats occupancy as a set difference.
+This keeps a single availability endpoint serving both the booking flow and the map, rather
+than adding a second endpoint that returns the same information inverted. The payoff is that
+changing only the destination visibly repaints seats between red and free, which is the
+feature made observable.
+
+### 2. Two-tier fare instead of one distance rate
+
+**Problem.** The brief describes the department charging reserved passengers roughly double
+an unreserved fare for the same leg, justified by the seat sitting empty for the rest of the
+route. Segment booking removes that justification — the seat is resold — so carrying the
+same rate forward would have kept charging passengers for a cost the system no longer
+incurs, which is the unfairness the brief points at.
+
+**Solution.** `FareCalculatorService` takes the coach type and applies a different rate per
+km: 3.2 reserved, 2.0 unreserved. Reserved still costs more, but 1.6× rather than 2×, and
+the premium now stands for what the passenger actually receives — a guaranteed seat instead
+of a standing risk — not for dead mileage.
+
+**Design.** Rates are constants, and the computed fare is written onto the booking rather
+than derived at read time, so repricing never rewrites the value of a ticket already sold.
+Fares stay a pure function of `(distance, coach type)` with no per-route table to maintain;
+because `distance_km` is cumulative, subtracting the two stations bills each passenger for
+their own leg. A per-route or per-station-pair price matrix would be more expressive, but it
+grows quadratically with the route and there is no pricing rule in the brief that needs it.
+
+## Known limitations and what I would do next
+
+- **No automated test suite.** The concurrency behaviour is the part most deserving of one:
+  an exclusion-constraint test that fires two overlapping inserts concurrently and asserts
+  exactly one survives with a `409`, plus boundary tests for adjacent legs. Verification is
+  currently the manual tour above, which is the weakest point of the submission.
+- **Idempotency is wired up but incomplete.** `Api::V1::BookingsController` reads an
+  `Idempotency-Key` header and reaches for `response_status` / `response_body` on
+  `IdempotencyKey`, but those columns were never added, so sending that header would fail.
+  Nothing in the frontend sends it, so the path is dormant rather than harmful — it needs
+  either the migration or removal before it is trusted.
+- **Standing tickets are unbounded.** An unreserved booking with no seat always succeeds;
+  there is no capacity ceiling on standing passengers per segment. A real deployment would
+  cap it against the coach's standing capacity.
+- **No cancellations, waitlisting, or admin reporting.** The `cancelled` status exists on
+  `Booking` and the constraint already ignores non-confirmed rows, so cancellation is a
+  small endpoint away; waitlisting and an occupancy/revenue view were the extra-credit items
+  I did not get to.
+- **No authentication.** Every endpoint is open, and the frontend is an unguarded admin
+  console. Fine for a review environment, not for a launch.
