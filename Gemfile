@@ -45,7 +45,7 @@ group :development, :test do
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
 
-  gem "bullet", "~> 8.1"
+  gem "bullet", "~> 8.2"
 
   gem "rack-cors"
 end
